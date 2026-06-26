@@ -35,6 +35,17 @@ type RegisterResponse struct {
 	Gateway Gateway `json:"gateway"`
 }
 
+// HeartbeatRequest is sent by the agent periodically.
+type HeartbeatRequest struct {
+	MacAddress string `json:"mac_address"`
+	Version    string `json:"version"`
+}
+
+// HeartbeatResponse is returned after a successful heartbeat.
+type HeartbeatResponse struct {
+	Status string `json:"status"`
+}
+
 // HandleRegister processes gateway registration.
 func (h *Handler) HandleRegister(c *fiber.Ctx) error {
 	var req RegisterRequest
@@ -69,6 +80,34 @@ func (h *Handler) HandleRegister(c *fiber.Ctx) error {
 
 	return c.Status(fiber.StatusOK).JSON(RegisterResponse{
 		Gateway: *gw,
+	})
+}
+
+// HandleHeartbeat processes agent heartbeat pings.
+func (h *Handler) HandleHeartbeat(c *fiber.Ctx) error {
+	var req HeartbeatRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.MacAddress == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "mac_address is required",
+		})
+	}
+
+	// Update last_seen and status
+	if err := h.repo.Heartbeat(c.Context(), req.MacAddress, req.Version); err != nil {
+		h.logger.Error("failed to process heartbeat", zap.Error(err))
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to process heartbeat",
+		})
+	}
+
+	return c.JSON(HeartbeatResponse{
+		Status: "ok",
 	})
 }
 
@@ -115,4 +154,5 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 	router.Post("/gateways", h.HandleRegister)
 	router.Get("/gateways", h.HandleList)
 	router.Get("/gateways/:mac", h.HandleGetByMac)
+	router.Post("/gateways/heartbeat", h.HandleHeartbeat)
 }

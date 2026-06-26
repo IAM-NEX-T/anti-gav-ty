@@ -70,13 +70,54 @@ func (r *Repository) Register(ctx context.Context, gw *Gateway) error {
 	gw.Status = "online"
 	gw.LastSeen = time.Now()
 
-	r.logger.Info("gateway registered",
-		zap.String("id", gw.ID),
-		zap.String("name", gw.Name),
-		zap.String("mac", gw.MacAddress),
-	)
+	return nil
+}
+
+// Heartbeat updates last_seen and status for a gateway.
+func (r *Repository) Heartbeat(ctx context.Context, mac string, version string) error {
+	query := `
+		UPDATE gateways
+		SET status = 'online',
+		    last_seen = NOW(),
+		    version = CASE WHEN $2 != '' THEN $2 ELSE version END,
+		    updated_at = NOW()
+		WHERE mac_address = $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, mac, version)
+	if err != nil {
+		return fmt.Errorf("updating heartbeat: %w", err)
+	}
+
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("gateway not found: %s", mac)
+	}
 
 	return nil
+}
+
+// MarkOffline marks gateways as offline if they haven't sent a heartbeat.
+func (r *Repository) MarkOffline(ctx context.Context, timeout time.Duration) (int64, error) {
+	query := `
+		UPDATE gateways
+		SET status = 'offline', updated_at = NOW()
+		WHERE status = 'online'
+		AND last_seen < NOW() - $1
+	`
+
+	result, err := r.pool.Exec(ctx, query, timeout)
+	if err != nil {
+		return 0, fmt.Errorf("marking offline: %w", err)
+	}
+
+	affected := result.RowsAffected()
+	if affected > 0 {
+		r.logger.Info("marked gateways offline",
+			zap.Int64("count", affected),
+		)
+	}
+
+	return affected, nil
 }
 
 // GetByMacAddress retrieves a gateway by its MAC address.

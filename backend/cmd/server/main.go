@@ -15,6 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const heartbeatTimeout = 60 * time.Second
+
 func main() {
 	configPath := flag.String("config", "configs/backend.yaml", "path to configuration file")
 	flag.Parse()
@@ -57,6 +59,17 @@ func main() {
 	// Initialize repositories and handlers
 	gatewayRepo := gateway.NewRepository(db.Pool, log)
 	gatewayHandler := gateway.NewHandler(gatewayRepo, log)
+
+	// Start heartbeat cleanup goroutine
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := gatewayRepo.MarkOffline(context.Background(), heartbeatTimeout); err != nil {
+				log.Error("heartbeat cleanup failed", zap.Error(err))
+			}
+		}
+	}()
 
 	srv := server.New(log, server.Config{
 		Host:         cfg.Server.Host,
