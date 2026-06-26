@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/IAM-NEX-T/anti-gav-ty/backend/internal/gateway"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -16,20 +17,16 @@ import (
 )
 
 const (
-	// Version is the current API version.
-	Version = "0.1.0"
-	// ShutdownTimeout is the maximum time to wait for graceful shutdown.
+	Version        = "0.1.0"
 	ShutdownTimeout = 30 * time.Second
 )
 
-// Server wraps the Fiber HTTP server and its dependencies.
 type Server struct {
 	app    *fiber.App
 	logger *zap.Logger
 	config Config
 }
 
-// Config holds the server configuration.
 type Config struct {
 	Host         string
 	Port         int
@@ -38,8 +35,12 @@ type Config struct {
 	IdleTimeout  time.Duration
 }
 
-// New creates a new Server instance.
-func New(logger *zap.Logger, cfg Config) *Server {
+// Handlers holds all route handlers.
+type Handlers struct {
+	Gateway *gateway.Handler
+}
+
+func New(logger *zap.Logger, cfg Config, handlers Handlers) *Server {
 	app := fiber.New(fiber.Config{
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
@@ -47,7 +48,6 @@ func New(logger *zap.Logger, cfg Config) *Server {
 		AppName:      "anti-gav-ty-backend",
 	})
 
-	// Middleware
 	app.Use(requestid.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
@@ -62,24 +62,23 @@ func New(logger *zap.Logger, cfg Config) *Server {
 		config: cfg,
 	}
 
-	s.registerRoutes()
+	s.registerRoutes(handlers)
 
 	return s
 }
 
-// registerRoutes sets up all API routes.
-func (s *Server) registerRoutes() {
-	// API v1 group
+func (s *Server) registerRoutes(h Handlers) {
 	v1 := s.app.Group("/api/v1")
 
-	// Health check
 	v1.Get("/health", s.handleHealth)
-
-	// Readiness check
 	v1.Get("/health/ready", s.handleReady)
+
+	// Gateway routes
+	if h.Gateway != nil {
+		h.Gateway.RegisterRoutes(v1)
+	}
 }
 
-// handleHealth returns basic health information.
 func (s *Server) handleHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "ok",
@@ -87,21 +86,17 @@ func (s *Server) handleHealth(c *fiber.Ctx) error {
 	})
 }
 
-// handleReady returns the readiness state.
 func (s *Server) handleReady(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status": "ready",
 	})
 }
 
-// Start begins listening and blocks until the server shuts down.
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	// Channel to receive errors from the listen goroutine
 	errCh := make(chan error, 1)
 
-	// Start server in goroutine
 	go func() {
 		s.logger.Info("server starting",
 			zap.String("host", s.config.Host),
@@ -112,7 +107,6 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	// Wait for interrupt signal or listen error
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -123,7 +117,6 @@ func (s *Server) Start() error {
 		s.logger.Info("shutdown signal received", zap.String("signal", sig.String()))
 	}
 
-	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 	defer cancel()
 

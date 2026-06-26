@@ -9,6 +9,7 @@ import (
 
 	"github.com/IAM-NEX-T/anti-gav-ty/backend/internal/config"
 	dbpkg "github.com/IAM-NEX-T/anti-gav-ty/backend/internal/database"
+	"github.com/IAM-NEX-T/anti-gav-ty/backend/internal/gateway"
 	"github.com/IAM-NEX-T/anti-gav-ty/backend/internal/logger"
 	"github.com/IAM-NEX-T/anti-gav-ty/backend/internal/server"
 	"go.uber.org/zap"
@@ -53,12 +54,18 @@ func main() {
 		log.Fatal("failed to run migrations", zap.Error(err))
 	}
 
+	// Initialize repositories and handlers
+	gatewayRepo := gateway.NewRepository(db.Pool, log)
+	gatewayHandler := gateway.NewHandler(gatewayRepo, log)
+
 	srv := server.New(log, server.Config{
 		Host:         cfg.Server.Host,
 		Port:         cfg.Server.Port,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 		IdleTimeout:  cfg.Server.IdleTimeout,
+	}, server.Handlers{
+		Gateway: gatewayHandler,
 	})
 
 	if err := srv.Start(); err != nil {
