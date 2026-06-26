@@ -2,6 +2,7 @@ mod agent;
 mod config;
 mod device;
 mod error;
+mod firewall;
 
 use clap::Parser;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
