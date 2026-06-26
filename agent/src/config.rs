@@ -14,6 +14,8 @@ pub enum ConfigError {
 pub struct Config {
     pub agent: AgentConfig,
     pub backend: BackendConfig,
+    #[serde(default)]
+    pub nextdns: NextDnsConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -31,21 +33,12 @@ pub struct BackendConfig {
     pub heartbeat_path: String,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            agent: AgentConfig {
-                name: "anti-gav-ty-gateway".to_string(),
-                heartbeat_interval_secs: 15,
-                interface: None,
-            },
-            backend: BackendConfig {
-                url: "http://localhost:8080".to_string(),
-                register_path: "/api/v1/gateways".to_string(),
-                heartbeat_path: "/api/v1/gateways/heartbeat".to_string(),
-            },
-        }
-    }
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct NextDnsConfig {
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub profile_id: String,
 }
 
 pub fn load(path: &str) -> Result<Config, ConfigError> {

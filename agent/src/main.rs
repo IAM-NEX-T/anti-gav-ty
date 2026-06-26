@@ -3,6 +3,7 @@ mod config;
 mod device;
 mod error;
 mod firewall;
+mod nextdns;
 
 use clap::Parser;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};

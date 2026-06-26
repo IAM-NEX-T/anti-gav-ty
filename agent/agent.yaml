@@ -7,3 +7,7 @@ backend:
   url: "http://localhost:8080"
   register_path: "/api/v1/gateways"
   heartbeat_path: "/api/v1/gateways/heartbeat"
+
+nextdns:
+  api_key: ""
+  profile_id: ""
