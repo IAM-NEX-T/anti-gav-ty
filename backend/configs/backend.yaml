@@ -1,0 +1,24 @@
+# LAMO-SEVE Backend Configuration
+# Environment variables override these values (prefix: LAMO_)
+# Example: LAMO_SERVER_PORT=9090 overrides server.port
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 10s
+  write_timeout: 10s
+  idle_timeout: 60s
+
+log:
+  level: "info"      # debug, info, warn, error
+  format: "json"     # json or console
+
+database:
+  url: "postgres://lamo:lamo@localhost:5432/lamoseve?sslmode=disable"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+
+nextdns:
+  api_key: ""
+  profile_id: ""
