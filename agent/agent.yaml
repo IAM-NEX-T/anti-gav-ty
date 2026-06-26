@@ -1,0 +1,9 @@
+agent:
+  name: "anti-gav-ty-gateway"
+  heartbeat_interval_secs: 15
+  interface: null
+
+backend:
+  url: "http://localhost:8080"
+  register_path: "/api/v1/gateways"
+  heartbeat_path: "/api/v1/gateways/heartbeat"
