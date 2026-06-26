@@ -9,15 +9,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the top-level application configuration.
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Log      LogConfig      `yaml:"log"`
-	Database DatabaseConfig `yaml:"database"`
-	NextDNS  NextDNSConfig  `yaml:"nextdns"`
+	Server     ServerConfig     `yaml:"server"`
+	Log        LogConfig        `yaml:"log"`
+	Database   DatabaseConfig   `yaml:"database"`
+	NextDNS    NextDNSConfig    `yaml:"nextdns"`
+	Migrations MigrationsConfig `yaml:"migrations"`
 }
 
-// ServerConfig holds HTTP server settings.
 type ServerConfig struct {
 	Host         string        `yaml:"host"`
 	Port         int           `yaml:"port"`
@@ -26,13 +25,11 @@ type ServerConfig struct {
 	IdleTimeout  time.Duration `yaml:"idle_timeout"`
 }
 
-// LogConfig holds logging settings.
 type LogConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
-// DatabaseConfig holds database connection settings.
 type DatabaseConfig struct {
 	URL             string        `yaml:"url"`
 	MaxOpenConns    int           `yaml:"max_open_conns"`
@@ -40,13 +37,15 @@ type DatabaseConfig struct {
 	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
 }
 
-// NextDNSConfig holds NextDNS API settings.
 type NextDNSConfig struct {
 	APIKey    string `yaml:"api_key"`
 	ProfileID string `yaml:"profile_id"`
 }
 
-// Load reads the configuration file and applies environment variable overrides.
+type MigrationsConfig struct {
+	Path string `yaml:"path"`
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -60,11 +59,13 @@ func Load(path string) (*Config, error) {
 
 	applyEnvOverrides(&cfg)
 
+	if cfg.Migrations.Path == "" {
+		cfg.Migrations.Path = "migrations"
+	}
+
 	return &cfg, nil
 }
 
-// applyEnvOverrides checks for environment variables with the LAMO_ prefix
-// and overrides the corresponding config values.
 func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("LAMO_SERVER_HOST"); v != "" {
 		cfg.Server.Host = v
