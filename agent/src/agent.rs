@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::device::DeviceScanner;
 use crate::error::AgentError;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -31,11 +32,18 @@ struct HeartbeatRequest {
     version: String,
 }
 
+#[derive(Debug, Serialize)]
+struct DevicesReport {
+    gateway_mac: String,
+    devices: Vec<crate::device::Device>,
+}
+
 pub struct Agent {
     config: Config,
     client: Client,
     mac_address: String,
     hostname: String,
+    scanner: DeviceScanner,
 }
 
 impl Agent {
@@ -66,6 +74,7 @@ impl Agent {
             client,
             mac_address: mac,
             hostname: host,
+            scanner: DeviceScanner::new(),
         })
     }
 
@@ -73,13 +82,26 @@ impl Agent {
         self.register().await?;
 
         let heartbeat_interval = Duration::from_secs(self.config.agent.heartbeat_interval_secs);
-        let mut ticker = tokio::time::interval(heartbeat_interval);
+        let mut hb_ticker = tokio::time::interval(heartbeat_interval);
+        let mut scan_ticker = tokio::time::interval(Duration::from_secs(60));
 
         loop {
-            ticker.tick().await;
-            if let Err(e) = self.heartbeat().await {
-                error!("heartbeat failed: {}", e);
-                self.register().await?;
+            tokio::select! {
+                _ = hb_ticker.tick() => {
+                    if let Err(e) = self.heartbeat().await {
+                        error!("heartbeat failed: {}", e);
+                        self.register().await?;
+                    }
+                }
+                _ = scan_ticker.tick() => {
+                    let devices = self.scanner.scan();
+                    if !devices.is_empty() {
+                        info!(count = devices.len(), "devices found");
+                        if let Err(e) = self.report_devices(&devices).await {
+                            error!("failed to report devices: {}", e);
+                        }
+                    }
+                }
             }
         }
     }
@@ -148,6 +170,29 @@ impl Agent {
         }
 
         tracing::debug!("heartbeat sent");
+        Ok(())
+    }
+
+    async fn report_devices(&self, devices: &[crate::device::Device]) -> Result<(), AgentError> {
+        let url = format!("{}/api/v1/devices/report", self.config.backend.url);
+
+        let report = DevicesReport {
+            gateway_mac: self.mac_address.clone(),
+            devices: devices.to_vec(),
+        };
+
+        let resp = self.client.post(&url).json(&report).send().await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(AgentError::Heartbeat(format!(
+                "device report failed: {} - {}",
+                status, body
+            )));
+        }
+
+        tracing::debug!(count = devices.len(), "devices reported");
         Ok(())
     }
 }

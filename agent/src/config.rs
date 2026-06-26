@@ -20,6 +20,7 @@ pub struct Config {
 pub struct AgentConfig {
     pub name: String,
     pub heartbeat_interval_secs: u64,
+    #[allow(dead_code)]
     pub interface: Option<String>,
 }
 
